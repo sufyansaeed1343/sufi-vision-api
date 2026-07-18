@@ -1,7 +1,2 @@
 flask
-torch
-diffusers
-transformers
-accelerate
-safetensors
 gunicorn
