@@ -1,15 +1,15 @@
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, jsonify, send_file
 import requests
 import os
 import io
 
 app = Flask(__name__)
 
-HF_TOKEN = os.environ.get("HF_TOKEN")
+HF_TOKEN = os.getenv("HF_TOKEN")
 
 API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
 
-headers = {
+HEADERS = {
     "Authorization": f"Bearer {HF_TOKEN}"
 }
 
@@ -21,26 +21,34 @@ def home():
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
 
     prompt = data.get("prompt", "A futuristic city")
 
     response = requests.post(
         API_URL,
-        headers=headers,
+        headers=HEADERS,
         json={"inputs": prompt},
         timeout=300
     )
 
-    if response.status_code != 200:
-        return jsonify({
-            "error": response.text
-        }), 500
+    # Image returned
+    if response.status_code == 200 and response.headers.get("content-type", "").startswith("image"):
+        return send_file(
+            io.BytesIO(response.content),
+            mimetype=response.headers["content-type"]
+        )
 
-    return send_file(
-        io.BytesIO(response.content),
-        mimetype="image/png"
-    )
+    # JSON error returned
+    try:
+        error = response.json()
+    except Exception:
+        error = {"error": response.text}
+
+    return jsonify({
+        "status": "failed",
+        "huggingface_response": error
+    }), response.status_code
 
 
 if __name__ == "__main__":
